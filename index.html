@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Podcast RSS Analyzer</title>
+</head>
+<body>
+  <h2>Podcast RSS Analyzer</h2>
+  <textarea id="rssInput" rows="20" cols="100" placeholder="Paste podcast RSS XML here..."></textarea><br>
+  <button onclick="analyze()">Analyze</button>
+  <pre id="output"></pre>
+
+  <script>
+    function parseDuration(str) {
+      const parts = str.split(':').map(Number).reverse();
+      let seconds = 0;
+      if (parts[0]) seconds += parts[0];
+      if (parts[1]) seconds += parts[1] * 60;
+      if (parts[2]) seconds += parts[2] * 3600;
+      return seconds;
+    }
+
+    function formatDuration(seconds) {
+      const h = Math.floor(seconds / 3600);
+      const m = Math.floor((seconds % 3600) / 60);
+      const s = seconds % 60;
+      return `${h}h ${m}m ${s}s`;
+    }
+
+    function analyze() {
+      const xmlText = document.getElementById('rssInput').value;
+      const parser = new DOMParser();
+      const xml = parser.parseFromString(xmlText, "text/xml");
+      const items = Array.from(xml.getElementsByTagName("item"));
+
+      const totalCount = items.length;
+
+      const enclosureTypes = {};
+      const withEnclosure = items.filter(item => {
+        const enc = item.getElementsByTagName("enclosure")[0];
+        if (enc) {
+          const type = enc.getAttribute("type") || "unknown";
+          enclosureTypes[type] = (enclosureTypes[type] || 0) + 1;
+          return true;
+        }
+        return false;
+      });
+
+      const withSeason = [], withoutSeason = [];
+      const seasonMap = new Map(); // season -> { count, duration, titles }
+      const seasonOrder = [];
+
+      let totalDuration = 0;
+
+      items.forEach(item => {
+        const title = item.getElementsByTagName("title")[0]?.textContent || "Untitled";
+        const durationTag = item.getElementsByTagNameNS("*", "duration")[0];
+        const duration = durationTag ? parseDuration(durationTag.textContent) : 0;
+        totalDuration += duration;
+
+        const seasonTag = item.getElementsByTagNameNS("*", "season")[0];
+        const season = seasonTag ? seasonTag.textContent.trim() : "NO_SEASON";
+
+        if (seasonTag) withSeason.push(item);
+        else withoutSeason.push(item);
+
+        if (!seasonMap.has(season)) {
+          seasonMap.set(season, { count: 0, duration: 0, titles: [] });
+          seasonOrder.push(season);
+        }
+
+        const seasonData = seasonMap.get(season);
+        seasonData.count += 1;
+        seasonData.duration += duration;
+        seasonData.titles.push(title);
+      });
+
+      const output = [];
+
+      // First List
+      output.push("Item Summary:");
+      output.push(`- Total items: ${totalCount}`);
+      output.push(`- Items with enclosures: ${withEnclosure.length}`);
+      for (const [type, count] of Object.entries(enclosureTypes)) {
+        output.push(`  - ${type}: ${count}`);
+      }
+      output.push(`- Items with itunes:season: ${withSeason.length}`);
+      output.push(`- Items without itunes:season: ${withoutSeason.length}`);
+      output.push("");
+
+      // Second List
+      output.push("Duration Summary:");
+      output.push(`- Total episodes: ${totalCount}, Total duration: ${formatDuration(totalDuration)}`);
+      for (const season of seasonOrder) {
+        const s = seasonMap.get(season);
+        output.push(`- Season ${season}: ${s.count} episodes, ${formatDuration(s.duration)}`);
+      }
+      output.push("");
+
+      // Third List
+      output.push("Episode Titles by Season:");
+      for (const season of seasonOrder) {
+        const s = seasonMap.get(season);
+        output.push(`- Season ${season}:`);
+        s.titles.forEach(title => {
+          output.push(`  - ${title}`);
+        });
+      }
+
+      document.getElementById("output").textContent = output.join("\n");
+    }
+  </script>
+</body>
+</html>
