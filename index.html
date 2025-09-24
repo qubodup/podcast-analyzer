@@ -27,7 +27,7 @@
     }
 
     function analyze() {
-      const xmlText = document.getElementById('rssInput').value;
+      const xmlText = document.getElementById('rssInput').value.trim();
       const parser = new DOMParser();
       const xml = parser.parseFromString(xmlText, "text/xml");
       const items = Array.from(xml.getElementsByTagName("item"));
@@ -111,3 +111,4 @@
   </script>
 </body>
 </html>
+
